@@ -1,0 +1,466 @@
+//Murad Aleskerov
+/*Testcode for  220 Homework 3 Spring 2020: Exploration of a grid graph */
+/* compiles with command line  gcc test.c -lX11 -lm */
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
+#include <X11/Xos.h>
+#include <X11/Xatom.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <bits/stdc++.h> 
+#include <vector>
+
+#define SIZE 30
+#define RADIUS 5
+#define SMALLRADIUS 3
+#include<iostream> 
+#include <math.h>
+#include <cmath>
+using namespace std; 
+
+
+#include<bits/stdc++.h> 
+using namespace std; 
+  
+  
+float scalex, scaley;
+int points_x[SIZE]; int points_y[SIZE];
+void tree_edge(int i, int j);
+void TSP_edge(int i, int j);
+void MST_TSP(int *px, int *py, int n);
+int minN(int array[][SIZE], int x, int n);  
+
+
+Display *display_ptr;
+Screen *screen_ptr;
+int screen_num;
+char *display_name = NULL;
+unsigned int display_width, display_height;
+
+Window win;
+int border_width;
+unsigned int win_width, win_height;
+int win_x, win_y;
+
+XWMHints *wm_hints;
+XClassHint *class_hints;
+XSizeHints *size_hints;
+XTextProperty win_name, icon_name;
+char *win_name_string = "Homework 4";
+char *icon_name_string = "Algorithms HW 4";
+
+XEvent report;
+
+GC gc, gc_yellow, gc_green, gc_red, gc_grey;
+unsigned long valuemask = 0;
+XGCValues gc_values, gc_yellow_values, gc_green_values,
+  gc_red_values, gc_grey_values;
+Colormap color_map;
+XColor tmp_color1, tmp_color2;
+
+
+int main(int argc, char **argv)
+{ int i;
+  int rand_init_value;
+  if( argc > 1 )
+    {  sscanf(argv[1], "%d", &rand_init_value);
+       srand( rand_init_value );
+    }
+  /* generate the points in square with coordinate 50....950 */
+  for(i =0; i < SIZE-8; i++ )
+  {  points_x[i] = 50 + (rand()%900);
+     points_y[i] = 50 + (rand()%900);
+  }
+  points_x[SIZE-1] = 50; points_y[SIZE-1] = 50; 
+  points_x[SIZE-2] = 50; points_y[SIZE-2] =950; 
+  points_x[SIZE-3] =950; points_y[SIZE-3] = 50; 
+  points_x[SIZE-4] =950; points_y[SIZE-4] =950; 
+  points_x[SIZE-5] =200; points_y[SIZE-5] =500; 
+  points_x[SIZE-6] =800; points_y[SIZE-6] =500; 
+  points_x[SIZE-7] =500; points_y[SIZE-7] =200; 
+  points_x[SIZE-8] =500; points_y[SIZE-8] =800; 
+  /* opening display: basic connection to X Server */
+  if( (display_ptr = XOpenDisplay(display_name)) == NULL )
+    { printf("Could not open display. \n"); exit(-1);}
+  printf("Connected to X server  %s\n", XDisplayName(display_name) );
+  screen_num = DefaultScreen( display_ptr );
+  screen_ptr = DefaultScreenOfDisplay( display_ptr );
+  color_map  = XDefaultColormap( display_ptr, screen_num );
+  display_width  = DisplayWidth( display_ptr, screen_num );
+  display_height = DisplayHeight( display_ptr, screen_num );
+
+  printf("Width %d, Height %d, Screen Number %d\n", 
+           display_width, display_height, screen_num);
+  /* creating the window */
+  border_width = 10;
+  win_x = 0; win_y = 0;
+  win_height = (int) (display_height/1.3);
+  win_width = win_height; /*square window*/
+  
+  win= XCreateSimpleWindow( display_ptr, RootWindow( display_ptr, screen_num),
+                            win_x, win_y, win_width, win_height, border_width,
+                            BlackPixel(display_ptr, screen_num),
+                            WhitePixel(display_ptr, screen_num) );
+  /* now try to put it on screen, this needs cooperation of window manager */
+  size_hints = XAllocSizeHints();
+  wm_hints = XAllocWMHints();
+  class_hints = XAllocClassHint();
+  if( size_hints == NULL || wm_hints == NULL || class_hints == NULL )
+    { printf("Error allocating memory for hints. \n"); exit(-1);}
+
+  size_hints -> flags = PPosition | PSize | PMinSize  ;
+  size_hints -> min_width = 60;
+  size_hints -> min_height = 60;
+
+  XStringListToTextProperty( &win_name_string,1,&win_name);
+  XStringListToTextProperty( &icon_name_string,1,&icon_name);
+  
+  wm_hints -> flags = StateHint | InputHint ;
+  wm_hints -> initial_state = NormalState;
+  wm_hints -> input = False;
+
+  class_hints -> res_name = "x_use_example";
+  class_hints -> res_class = "examples";
+
+  XSetWMProperties( display_ptr, win, &win_name, &icon_name, argv, argc,
+                    size_hints, wm_hints, class_hints );
+
+  /* what events do we want to receive */
+  XSelectInput( display_ptr, win, 
+            ExposureMask | StructureNotifyMask | ButtonPressMask );
+  
+  /* finally: put window on screen */
+  XMapWindow( display_ptr, win );
+
+  XFlush(display_ptr);
+
+  /* create graphics context, so that we may draw in this window */
+  gc = XCreateGC( display_ptr, win, valuemask, &gc_values);
+  XSetForeground( display_ptr, gc, BlackPixel( display_ptr, screen_num ) );
+  XSetLineAttributes( display_ptr, gc, 2, LineSolid, CapRound, JoinRound);
+  /* and some other graphics contexts, to draw in yellow and red and grey*/
+  /* yellow*/
+  gc_yellow = XCreateGC( display_ptr, win, valuemask, &gc_yellow_values);
+  XSetLineAttributes(display_ptr, gc_yellow, 2, LineSolid,CapRound, JoinRound);
+  if( XAllocNamedColor( display_ptr, color_map, "yellow", 
+			&tmp_color1, &tmp_color2 ) == 0 )
+    {printf("failed to get color yellow\n"); exit(-1);} 
+  else
+    XSetForeground( display_ptr, gc_yellow, tmp_color1.pixel );
+  /* green */
+  gc_green = XCreateGC( display_ptr, win, valuemask, &gc_green_values);
+  XSetLineAttributes(display_ptr, gc_green, 5, LineSolid,CapRound, JoinRound);
+  if( XAllocNamedColor( display_ptr, color_map, "green", 
+			&tmp_color1, &tmp_color2 ) == 0 )
+    {printf("failed to get color green\n"); exit(-1);} 
+  else
+    XSetForeground( display_ptr, gc_green, tmp_color1.pixel );
+  /* red*/
+  gc_red = XCreateGC( display_ptr, win, valuemask, &gc_red_values);
+  XSetLineAttributes( display_ptr, gc_red, 2, LineSolid, CapRound, JoinRound);
+  if( XAllocNamedColor( display_ptr, color_map, "red", 
+			&tmp_color1, &tmp_color2 ) == 0 )
+    {printf("failed to get color red\n"); exit(-1);} 
+  else
+    XSetForeground( display_ptr, gc_red, tmp_color1.pixel );
+  /* grey */
+  gc_grey = XCreateGC( display_ptr, win, valuemask, &gc_grey_values);
+  XSetLineAttributes( display_ptr, gc_grey, 2, LineSolid, CapRound, JoinRound);
+  if( XAllocNamedColor( display_ptr, color_map, "light grey", 
+			&tmp_color1, &tmp_color2 ) == 0 )
+    {printf("failed to get color grey\n"); exit(-1);} 
+  else
+    XSetForeground( display_ptr, gc_grey, tmp_color1.pixel );
+
+  /* and now it starts: the event loop */
+  while(1)
+    { XNextEvent( display_ptr, &report );
+      switch( report.type )
+      { 
+        case ConfigureNotify:
+          /* This event happens when the user changes the size of the window*/
+          win_width = report.xconfigure.width;
+          win_height = report.xconfigure.height;
+          /* break; this case continues into the next:after a resize, 
+             the figure gets redrawn */
+	case Expose:
+          /* (re-)draw the figure. This event happens
+             each time some part of the window gets exposed (becomes visible) */
+          XClearWindow( display_ptr, win );
+          scalex = win_width/1000.0;
+          scaley = win_height/1000.0;
+	  /* Draw Points */
+	  for(i = 0; i < SIZE; i++ )
+	      {
+		   XFillArc( display_ptr, win, gc, /*black*/
+			     (int) (points_x[i] * scalex)-RADIUS,
+			     (int) (points_y[i] * scaley)-RADIUS, 
+		       2*RADIUS, 2*RADIUS, 0, 360*64);
+	      }
+          /* Now call function to draw shortest path */
+	  MST_TSP(&(points_x[0]), &(points_y[0]), SIZE);
+	  
+	  /* Redraw Points*/
+	  for(i = 0; i < SIZE; i++ )
+	      {
+		   XFillArc( display_ptr, win, gc_yellow, /*yellow*/
+			     (int) (points_x[i] * scalex)-SMALLRADIUS,
+			     (int) (points_y[i] * scaley)-SMALLRADIUS, 
+		       2*SMALLRADIUS, 2*SMALLRADIUS, 0, 360*64);
+	      }
+
+
+          break;
+         default:
+	  /* this is a catch-all for other events; it does not do anything.
+             One could look at the report type to see what the event was */ 
+          break;
+	}
+
+    }
+  exit(0);
+}
+
+
+
+
+
+void tree_edge(int i, int j)
+{ if( i <0 || i>= SIZE || j< 0 || j >=SIZE )
+    printf(" called tree_edge to connect points %d and %d\n", i,j);
+  else
+    XDrawLine(display_ptr, win, gc_green,
+	      (int) (scalex*points_x[i]),
+	      (int) (scaley*points_y[i]),
+	      (int) (scalex*points_x[j]),
+	      (int) (scaley*points_y[j]) );
+}
+void TSP_edge(int i, int j)
+{ if( i <0 || i>= SIZE || j< 0 || j >=SIZE )
+    printf(" called TSP_edge to connect points %d and %d\n", i,j);
+  else
+    XDrawLine(display_ptr, win, gc_red,
+	      (int) (scalex*points_x[i]),
+	      (int) (scaley*points_y[i]),
+	      (int) (scalex*points_x[j]),
+	      (int) (scaley*points_y[j]) );
+}
+
+
+float PythTheorem (float x, float y){
+	float a = pow(x, 2);
+	float b = pow(y, 2);
+	float pyth = sqrt(a + b);
+	return pyth;
+}
+
+pair<int,int> minN(float array[SIZE][SIZE], Bool visited[SIZE], int x){
+	float minNum = 100000;
+	int a = x; // -1
+	for(int i = 0; i < SIZE; i++){
+		if((minNum >= array[x][i]) && (x!=i) && (visited[i] == false)){
+			minNum = float(array[x][i]);
+			a = i;
+		}
+	}
+	return make_pair (a, minNum);
+}
+
+float minD(float array[SIZE]){
+	
+	float minNum = array[0];
+	int a = 0;
+	for(int i = 0; i < SIZE; i++){
+		if(minNum >= array[i]){
+			minNum = array[i];
+			a = i;
+		}
+	}
+	return a;
+}
+pair<int,int> search(float mat[SIZE][SIZE], int x) 
+{ 
+    for(int i = 0; i < SIZE; i++) 
+    { 
+        for(int j = 0; j < SIZE; j++) 
+        if(mat[i][j] == x) 
+        { 
+            return make_pair (i, j); 
+        } 
+    } 
+    
+} 
+void selectionSort(float a[], int n) {
+   int i, j, min, temp;
+   for (i = 0; i < n - 1; i++) {
+      min = i;
+      for (j = i + 1; j < n; j++){
+         if (a[j] < a[min]){
+            min = j;
+			}
+		}
+      temp = a[i];
+      a[i] = a[min];
+      a[min] = temp;
+   }
+}
+
+void sortMat(float mat[SIZE][SIZE], int n) 
+{ 
+    float temp[SIZE * SIZE]; 
+    int k = 0; 
+  
+    for (int i = 0; i < n; i++) 
+        for (int j = 0; j < n; j++) 
+            temp[k++] = mat[i][j]; 
+  
+    selectionSort(temp, k);
+
+    k = 0; 
+    for (int i = 0; i < n; i++){
+        for (int j = 0; j < n; j++){ 
+            mat[i][j] = temp[k++];
+            printf("\n");
+            printf("%.2f\t", temp[k]);	 
+		}
+	}
+} 
+
+void pri(float array[SIZE][SIZE]){
+		for(int x = 0; x < SIZE; x++){
+		printf("\n\n");
+		for(int y = 0; y < SIZE; y++){
+				printf("%.2f\t", array[x][y]);			
+		}
+	}
+}
+
+float total(float array[SIZE][SIZE], Bool visited[SIZE], int xy){
+	int a = xy;
+	float Distance = 0;
+	for (int i = 0; i < SIZE; i++){
+		pair<int,int> min = minN(array, visited, a);
+		Distance += min.second;
+		visited[a] = True;
+		a = min.first;
+	}
+	return Distance;
+}
+
+void drawb(float array[SIZE][SIZE], Bool visited[SIZE], int xy){
+	int a = xy;
+	int b = a;
+	float Distance = 0;
+	for (int i = 0; i < SIZE; i++){
+		pair<int,int> min = minN(array, visited, a);
+		visited[a] = True;
+		TSP_edge(a, min.first);
+		a = min.first;
+	}
+	TSP_edge(a, b);
+}
+
+typedef  pair<int, int> iPair; 
+struct Graph 
+{ 
+    int V, E; 
+    vector< pair<int, iPair> > edges; 
+    Graph(int numPoints, int numEdges) 
+    { 
+        this->V = numPoints; 
+        this->E = numEdges; 
+    } 
+    void addEdge(int u, int v, int w) 
+    { 
+        edges.push_back({w, {u, v}}); 
+    } 
+    int kruskalMST(); 
+};  
+
+struct DisjointSets 
+{ 
+    int *parent, *rank; 
+    int num; 
+    DisjointSets(int n) 
+    { 
+        num = n; 
+        parent = new int[n+1]; 
+        rank = new int[n+1]; 
+        for (int i = 0; i <= n; i++) 
+        { 
+            rank[i] = 0; 
+            parent[i] = i; 
+        } 
+    } 
+    int find(int u) 
+    { 
+        if (u != parent[u]) 
+            parent[u] = find(parent[u]); 
+        return parent[u]; 
+    } 
+    void merge(int x, int y) 
+    { 
+        x = find(x), y = find(y); 
+        if (rank[x] > rank[y]) 
+            parent[y] = x; 
+        else 
+            parent[x] = y; 
+        if (rank[x] == rank[y]) 
+            rank[y]++; 
+    } 
+}; 
+int Graph::kruskalMST() 
+{ 
+    int mst_wt = 0;
+    sort(edges.begin(), edges.end()); 
+    DisjointSets ds(V); 
+    vector< pair<int, iPair> >::iterator it; 
+    for (it=edges.begin(); it!=edges.end(); it++) 
+    { 
+        int u = it->second.first; 
+        int v = it->second.second; 
+        int set_u = ds.find(u); 
+        int set_v = ds.find(v); 
+        if (set_u != set_v) 
+        { 
+            tree_edge(u,v);
+            mst_wt += it->first; 
+            ds.merge(set_u, set_v); 
+        } 
+    } 
+  
+    return mst_wt; 
+} 
+
+void MST_TSP(int *px, int *py, int n)
+{   
+	int V = 30, E = 30*30; 
+    Graph g(V, E);
+    
+	float array[SIZE][SIZE];
+	float path[SIZE][SIZE];
+	for(int x = 0; x < n; x++){
+		for(int y = 0; y < n; y++){
+				array[x][y] = PythTheorem(px[y]-px[x],py[y]-py[x]);	
+				path[x][y] = PythTheorem(px[y]-px[x],py[y]-py[x]);	
+				g.addEdge(x,y,path[x][y]);		
+		}
+	}
+	    int mst_wt = g.kruskalMST(); 
+	//sortMat(path,n);
+	pri(path);
+	
+	float diS[SIZE];
+	for (int i = 0; i<SIZE; i++){
+		int startPoint = i;
+		Bool visited[SIZE] = {False};
+		visited[startPoint] = True;
+		diS[i] = total(array, visited, i);
+	}
+	int inde = minD(diS);
+	Bool visited[SIZE] = {False};
+	visited[inde] = True;
+	drawb(array, visited, inde);
+	
+}  
